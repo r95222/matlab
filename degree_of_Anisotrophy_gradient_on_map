@@ -127,6 +127,44 @@ end
  end
 oldcmin=min(doa);oldcmax=max(doa);
 newcmax=min(abs(oldcmin),abs(oldcmax));
+
+% Prompt for an optional pure lattice image or MAT file
+[imgFile,imgPath] = uigetfile({'*.mat;*.png;*.jpg;*.tif;*.bmp','Image or MAT files'}, ...
+    'Select pure lattice data (optional)');
+if isequal(imgFile,0)
+    disp('No lattice overlay file selected.');
+else
+    latticePath = fullfile(imgPath,imgFile);
+    [~,~,ext] = fileparts(latticePath);
+    if strcmpi(ext,'.mat')
+        tmp = load(latticePath);
+        fns = fieldnames(tmp);
+        latticeImg = tmp.(fns{1});
+    else
+        latticeImg = imread(latticePath);
+    end
+
+    figLat = figure('Units','normalized','Position',[0.1 0.1 0.8 0.8]);
+    ax1Lat = axes('Position',[0.1 0.1 0.8 0.8]);
+    imagesc(ax1Lat,latticeImg);
+    axis(ax1Lat,'image','off');
+    title(ax1Lat,'Lattice + DOA overlay');
+
+    ax2Lat = axes('Position',ax1Lat.Position,'Color','none', ...
+        'XLim',ax1Lat.XLim,'YLim',ax1Lat.YLim,'YDir',ax1Lat.YDir, ...
+        'DataAspectRatio',ax1Lat.DataAspectRatio);
+    hold(ax2Lat,'on');
+    pos = doa > 0; neg = doa < 0;
+    scatter(ax2Lat,localmaxpoints(pos,1),localmaxpoints(pos,2), ...
+        60,doa(pos),'Marker','|','LineWidth',3);
+    scatter(ax2Lat,localmaxpoints(neg,1),localmaxpoints(neg,2), ...
+        60,doa(neg),'Marker','_','LineWidth',3);
+    ax2Lat.Colormap = mcolormap12;
+    caxis(ax2Lat,[-newcmax/2 newcmax/2]);
+    ax2Lat.Visible = 'off';
+    colorbar('peer',ax2Lat,'Location','westoutside');
+    linkprop([ax1Lat,ax2Lat],{'XLim','YLim','DataAspectRatio','YDir'});
+end
 %  doax= doa;
 % doax(doax<=0)=0;
 %  doay= doa;
