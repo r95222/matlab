@@ -11,6 +11,7 @@ S= load('mblue2.mat');   % 會把 mblue2 讀進來
 SS= load('mcolormap12.mat');   % 會把 mblue2 讀進來
     mcolormap12 = colormap(SS.mcolormap12);
 mdebug1=0;
+plotBars = false; % Set true to display bar-style DOA visualization
 img_obj_viewer2(data);
 hold on;
 A = imregionalmax(data.map);
@@ -127,6 +128,38 @@ end
  end
 oldcmin=min(doa);oldcmax=max(doa);
 newcmax=min(abs(oldcmin),abs(oldcmax));
+
+%% Select lattice image from workspace instead of using uigetfile
+varNames = evalin('base','who');
+[idx,tf] = listdlg('PromptString','Select lattice variable', ...
+                   'ListString', varNames);
+
+if tf
+    selectedVar = evalin('base', varNames{idx});
+    if isstruct(selectedVar)
+        if isfield(selectedVar, 'map')
+            latticeImg = selectedVar.map;
+        else
+            disp('Selected structure does not contain ''map'' field. Skipping overlay.');
+            tf = false;
+        end
+    elseif isnumeric(selectedVar)
+        latticeImg = selectedVar;
+    else
+        disp('Selected variable is not a numeric image. Skipping overlay.');
+        tf = false;
+    end
+end
+
+if tf
+    figure;
+    imagesc(latticeImg); hold on;
+    scatter(localmaxpoints(:,1), localmaxpoints(:,2), [], doa, 'filled');
+    colormap(mcolormap12); pbaspect([1 1 1]);
+    clim([-newcmax/2 newcmax/2]); colorbar;
+else
+    disp('Lattice selection cancelled. Skipping overlay.');
+end
 %  doax= doa;
 % doax(doax<=0)=0;
 %  doay= doa;
@@ -307,6 +340,7 @@ linkprop([ax1,ax2],{'XLim','YLim','DataAspectRatio','YDir'});
 %plot all data
 
 
+if plotBars
 fig4 = figure('Color','none','Units','normalized','Position',[0.3 0.3 0.5 0.5]);
 % 2) 複製 ax2 到這個新 figure
 newAx = copyobj(ax2, fig4);
@@ -326,6 +360,7 @@ newAx.DataAspectRatio = ax2.DataAspectRatio;
 % 6) 加上 colorbar（選擇自己喜歡的位置）
 cb4 = colorbar(newAx,'eastoutside');
 cb4.Label.String = 'DOA 色階';
+end
 %% 假設你已經有：data.map, localmaxpoints, doa, newcmax, mblue2, mcolormap12
 
 % 1) 先開新 figure，配置好底圖和疊層的空間
