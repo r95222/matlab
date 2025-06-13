@@ -1,0 +1,634 @@
+% close all;
+
+clearvars  -except m*; 
+data_name=select_var('Select a data');
+ data=evalin('base' , data_name);
+testimg=data.map;
+[nr,nc,~] = size(data.map);
+addpath('J:\((Gsuite cloud\STM View 20191111\Color Maps');
+S= load('mblue2.mat');   % 會把 mblue2 讀進來
+    mblue2 = colormap(S.mblue2);
+SS= load('mcolormap12.mat');   % 會把 mblue2 讀進來
+    mcolormap12 = colormap(SS.mcolormap12);
+mdebug1=0;
+img_obj_viewer2(data);
+hold on;
+A = imregionalmax(data.map);
+% B = imregionalmin(data.map);
+[rx,ry] = meshgrid(1:nr,1:nc);
+sh=plot((rx(A)),(ry(A)),'+r','markersize',4);
+% sh1=plot((rx(B)),(ry(B)),'+b','markersize',4);
+ localmaxpoints1(:,1)=(rx(A)); localmaxpoints1(:,2)=(ry(A));
+ % figure; plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+border_threshold = 3;
+
+localmaxpoints2= localmaxpoints1( ...
+    localmaxpoints1(:, 1) > border_threshold & ...  % Row > 3
+    localmaxpoints1(:, 2) > border_threshold & ...  % Column > 3
+    localmaxpoints1(:, 1) < (nr - border_threshold) & ...  % Row < (image_height - 3)
+    localmaxpoints1(:, 2) < (nc - border_threshold) ...     % Column < (image_width - 3)
+    , :);
+
+
+
+figure;
+
+imagesc(testimg);pbaspect([1 1 1]);title('Original') ;colormap (mblue2);clim( histogramvalr(testimg)); 
+hold on;sh=plot(localmaxpoints2(:,1),localmaxpoints2(:,2),'+r','markersize',4);
+
+img_obj_viewer2(data);
+hold on;
+A = imregionalmax(data.map);
+% B = imregionalmin(data.map);
+[rx,ry] = meshgrid(1:nr,1:nc);
+sh=plot(localmaxpoints2(:,1),localmaxpoints2(:,2),'+r','markersize',4);
+  %calculate differential      
+
+%%%Remove points within a radius
+unique_maxima = [];
+radius = 3;  % Half of 16-pixel diameter
+
+% Step 4: Sort local maxima by intensity values
+intensity_values = data.map(sub2ind(size(data.map), localmaxpoints2(:,1),localmaxpoints2(:,2)));
+[~, sorted_idx] = sort(intensity_values, 'descend');  % Sort by intensity
+sorted_maxima = localmaxpoints2(sorted_idx, :);          % Sort maxima by intensity
+
+% Step 5: Iterate over sorted maxima and keep only one point within a 16-pixel diameter
+for i = 1:size(sorted_maxima, 1)
+    % Check if current maximum is within 16-pixel diameter of already selected maxima
+    if isempty(unique_maxima)
+        unique_maxima = [unique_maxima; sorted_maxima(i,:)];  % Add the first maximum
+    else
+        distances = sqrt((unique_maxima(:,1) - sorted_maxima(i,1)).^2 + ...
+                         (unique_maxima(:,2) - sorted_maxima(i,2)).^2);
+        if all(distances > radius)  % If no nearby maxima are found
+            unique_maxima = [unique_maxima; sorted_maxima(i,:)];  % Keep this maximum
+        end
+    end
+end
+
+% Step 6: Count the number of unique local maxima after filtering
+
+num_tot_maxima = size(localmaxpoints1, 1);
+
+num_border_maxima = size(localmaxpoints2, 1);
+
+num_unique_maxima = size(unique_maxima, 1);
+
+% Display the number of unique maxima
+disp(['Number of total maxima: ', num2str(num_tot_maxima)]);
+disp(['Number of maxima inside border: ', num2str(num_border_maxima)]);
+disp(['Number of unique local maxima: ', num2str(num_unique_maxima)]);
+
+% (Optional) Plot the matrix and mark the unique maxima
+img_obj_viewer2(data);
+hold on; 
+plot(unique_maxima(:,1), unique_maxima(:,2), 'r+', 'MarkerSize', 4); % Mark maxima
+
+
+localmaxpoints=unique_maxima;
+
+%% 
+
+[gx, gy] = gradient(testimg);
+[gxx, gxy]=gradient(gx);
+[gyx, gyy]=gradient(gy);
+
+gxx_ave=mean(mean(abs(gxx)));
+gyy_ave=mean(mean(abs(gyy)));
+doa_map=abs(gxx)-abs(gyy)-(gxx_ave-gyy_ave);
+if mdebug1==1
+figure;
+
+sax1 = subplot(2,3,1);imagesc(testimg);pbaspect([1 1 1]);title('Original') ;colormap (mblue2);clim(sax1, histogramvalr(testimg)); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+sax2 = subplot(2,3,2);imagesc(gxx);pbaspect([1 1 1]);title('d^{2}Z/dx^{2}') ;colormap (mblue2);clim(sax2, histogramvalr(gxx)); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+sax3 = subplot(2,3,3);imagesc(abs(gxx));pbaspect([1 1 1]);title('abs(d^{2}Z/dx^{2})') ;colormap (mblue2);clim(sax3, histogramvalr(abs(gxx))); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+sax4 = subplot(2,3,4);imagesc(doa_map);pbaspect([1 1 1]);title('doa map') ;colormap (mblue2);clim(sax4, histogramvalr(doa_map)); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+sax5 = subplot(2,3,5);imagesc(gyy);pbaspect([1 1 1]);title('d^{2}Z/dy^{2}') ;colormap (mblue2);clim(sax5, histogramvalr(gyy)); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+sax6 = subplot(2,3,6);imagesc(abs(gyy));pbaspect([1 1 1]);title('abs(d^{2}Z/dy^{2})') ;colormap (mblue2);clim(sax6, histogramvalr(abs(gyy))); 
+hold on;sh=plot(localmaxpoints(:,1),localmaxpoints(:,2),'+r','markersize',4);
+linkaxes([sax1, sax2, sax3, sax4, sax5, sax6], 'xy');
+end
+
+ %calc differential in index
+
+ totpeaks=size(localmaxpoints);
+ for i=1:totpeaks
+ doa(i,:)=abs(gxx(localmaxpoints(i,2),localmaxpoints(i,1)))-abs(gyy(localmaxpoints(i,2),localmaxpoints(i,1))) - (gxx_ave - gyy_ave);
+%for troubleshooting
+%  doa(i,:)=doa_map(localmaxpoints(i,2),localmaxpoints(i,1));
+% doa1(i,:)=abs(gxx(localmaxpoints(i,2),localmaxpoints(i,1)))-abs(gyy(localmaxpoints(i,2),localmaxpoints(i,1))) - (gxx_ave - gyy_ave);
+%  doa2(i,:)=doa_map(localmaxpoints(i,2),localmaxpoints(i,1));
+ end
+oldcmin=min(doa);oldcmax=max(doa);
+newcmax=min(abs(oldcmin),abs(oldcmax));
+%  doax= doa;
+% doax(doax<=0)=0;
+%  doay= doa;
+% doay(doay>=0)=0;
+
+% %for troubleshooting
+% localmaxpoints(:,3)= doa1;
+% localmaxpoints(:,4)= doa2;
+% localmaxpoints(:,5)= doa1 - doa2;
+
+
+
+
+
+ % figure; errorbar(localmaxpoints(:,1),localmaxpoints(:,2),-doax/2,doax/2,-doay/2,doay/2,'o');
+ % f=figure; scatter(localmaxpoints(:,1),localmaxpoints(:,2),[],doa, 'filled');colormap(mcolormap12);pbaspect([1 1 1]);
+ % set(gca, 'YDir','reverse') ;clim([-newcmax/2 newcmax/2]);colorbar;
+ % % figure; scatter(localmaxpoints(:,1),localmaxpoints(:,2),[],-doax, 'square','filled');colormap (red);pbaspect([1 1 1]);
+ % % figure;scatter(localmaxpoints(:,1),localmaxpoints(:,2),[],doay, 'square','filled');colormap (blue);pbaspect([1 1 1]);
+ % 
+ % 
+ % xticks([]);yticks([]);
+       
+
+
+
+% % %--- 假設你已經計算好 doa, newcmax, localmaxpoints, 並有 mcolormap12 ---
+% % 
+% % % 參數：線段最大長度（可依需求調整）
+% % scale = 40;
+% % 
+% % % 取得當前 colormap 與大小
+% % cmap   = colormap(mcolormap12);
+% % nColor = size(cmap,1);
+% % 
+% % % 正負 DOA 最大絕對值，用於正規化長度與對應色階
+% % maxVal = max(abs(doa));
+% % 
+% % figure; hold on;
+% % for i = 1:numel(doa)
+% %     x0 = localmaxpoints(i,1);
+% %     y0 = localmaxpoints(i,2);
+% %     d  = doa(i);
+% %     % 線段長度＝絕對 DOA / maxVal * scale
+% %     L = abs(d)/maxVal * scale;
+% % 
+% %     if d > 0
+% %         % 正值：畫垂直線，中心在 (x0,y0)，長度 L
+% %         xLine = [x0, x0];
+% %         yLine = [y0 - L/2, y0 + L/2];
+% %     else
+% %         % 負值：畫水平線
+% %         xLine = [x0 - L/2, x0 + L/2];
+% %         yLine = [y0, y0];
+% %     end
+% % 
+% %     % 對 DOA 做色階映射：將 [-maxVal,maxVal] 映到 colormap index [1,nColor]
+% %     idx = round( (d + maxVal)/(2*maxVal) * (nColor-1) ) + 1;
+% %     idx = min(max(idx,1), nColor);  % 確保在範圍內
+% % 
+% %     % 畫線
+% %     plot(xLine, yLine, 'LineWidth', 2.5, 'Color', cmap(idx,:));
+% % end
+% % 
+% % % 調整座標
+% % set(gca, 'YDir','reverse', 'xtick', [], 'ytick', []);
+% % axis equal;
+% % colorbar;
+% % title('DOA 條形標記：正 = 垂直，負 = 水平');
+% % 
+% % 
+% % %%%%%%%長度不變的版本
+% % % 分出正、負 DOA 的索引
+% % pos = doa > 0;
+% % neg = doa < 0;
+% % 
+% % f = figure; hold on;
+% % % 正 DOA 用垂直線 '|'
+% % scatter( localmaxpoints(pos,1), localmaxpoints(pos,2), ...
+% %          60, doa(pos), ...            % 固定 size=80
+% %          'Marker','|', 'LineWidth',3 );
+% % % 負 DOA 用水平線 '_'
+% % scatter( localmaxpoints(neg,1), localmaxpoints(neg,2), ...
+% %          60, doa(neg), ...
+% %          'Marker','_', 'LineWidth',3 );
+% % 
+% % colormap(mcolormap12);
+% % clim([-newcmax/2 newcmax/2]);
+% % set(gca, 'YDir','reverse', 'xtick', [], 'ytick', []);
+% % colorbar;
+% % axis equal;
+% % title('DOA 方向標記：正=|，負=_');
+% --- 假設你已經有以下變數 ---
+% testimg           原始高度影像矩陣
+% doa_map           DOA map （或你要的全圖）
+% localmaxpoints    [x,y] 峰值座標
+% doa               峰值對應 DOA 值
+% newcmax           DOA 色階極限
+% mblue2            底圖專用 colormap
+% mcolormap12       標記專用 colormap
+
+figure('Units','normalized','Position',[0.1 0.1 0.8 0.8]);
+
+% --- 1) 底图层 axes1 ---
+ax1 = axes('Position',[0.1 0.1 0.8 0.8]);  % 手动设大小以便 overlay 对齐
+imagesc(ax1, testimg);
+ax1.Colormap = gray;   
+%ax1.Colormap = mblue2;                      % 底图专用色带
+caxis(ax1, histogramvalr(testimg));
+axis(ax1,'image','off');
+title(ax1,'Topo + DOA overlay');
+cb1 = colorbar(ax1,'eastoutside');
+cb1.Label.String = 'Height 色階';
+
+% --- 2) overlay 层 axes2 （完全在 ax1 上方，背景透明） ---
+ax2 = axes('Position',ax1.Position, ...
+           'Color','none', ...            % 透明背景
+           'XLim',ax1.XLim, 'YLim',ax1.YLim, ...
+           'YDir',ax1.YDir, ...
+           'DataAspectRatio',ax1.DataAspectRatio);
+hold(ax2,'on');
+pos = doa>0; neg = doa<0;
+
+%'LineWidth' is here !!
+
+scatter(ax2, (localmaxpoints(pos,1)), localmaxpoints(pos,2), ...
+        60, doa(pos), 'Marker','|','LineWidth',3);
+scatter(ax2, (localmaxpoints(neg,1)), localmaxpoints(neg,2), ...
+        60, doa(neg), 'Marker','_','LineWidth',3);
+ax2.Colormap = mcolormap12;
+%ax2.Colormap = gray;                  % overlay 专用色带
+caxis(ax2, [-newcmax/2 newcmax/2]);
+ax2.Visible = 'off';                         % 隐藏坐标
+%cb2 = colorbar(ax2,'westoutside');
+%cb2.Label.String = 'DOA 色階';
+cb2 = colorbar('peer', ax2, 'Location','westoutside');
+ax2.Position = ax1.Position;
+% --- 3) 同步缩放/平移 ---
+linkprop([ax1,ax2],{'XLim','YLim','DataAspectRatio','YDir'});
+%plot all data
+
+
+figure('Units','normalized','Position',[0.1 0.1 0.8 0.8]);
+
+% --- 1) 底图层 axes1 ---
+ax1 = axes('Position',[0.1 0.1 0.8 0.8]);  % 手动设大小以便 overlay 对齐
+imagesc(ax1, testimg);
+ax1.Colormap = gray;   
+%ax1.Colormap = mblue2;                      % 底图专用色带
+caxis(ax1, histogramvalr(testimg));
+axis(ax1,'image','off');
+title(ax1,'Topo + DOA overlay');
+cb1 = colorbar(ax1,'eastoutside');
+cb1.Label.String = 'Height 色階';
+
+% --- 2) overlay 层 axes2 （完全在 ax1 上方，背景透明） ---
+ax2 = axes('Position',ax1.Position, ...
+           'Color','none', ...            % 透明背景
+           'XLim',ax1.XLim, 'YLim',ax1.YLim, ...
+           'YDir',ax1.YDir, ...
+           'DataAspectRatio',ax1.DataAspectRatio);
+hold(ax2,'on');
+pos = doa>0; neg = doa<0;
+scatter(ax2, (localmaxpoints(pos,1)), localmaxpoints(pos,2), ...
+        60, doa(pos), 'Marker','|','LineWidth',3);
+scatter(ax2, (localmaxpoints(neg,1)), localmaxpoints(neg,2), ...
+        60, doa(neg), 'Marker','_','LineWidth',3);
+ax2.Colormap = mcolormap12;
+%ax2.Colormap = gray;                  % overlay 专用色带
+caxis(ax2, [-newcmax/2 newcmax/2]);
+ax2.Visible = 'off';                         % 隐藏坐标
+%cb2 = colorbar(ax2,'westoutside');
+%cb2.Label.String = 'DOA 色階';
+cb2 = colorbar('peer', ax2, 'Location','westoutside');
+ax2.Position = ax1.Position;
+% --- 3) 同步缩放/平移 ---
+linkprop([ax1,ax2],{'XLim','YLim','DataAspectRatio','YDir'});
+%plot all data
+
+
+fig4 = figure('Color','none','Units','normalized','Position',[0.3 0.3 0.5 0.5]);
+% 2) 複製 ax2 到這個新 figure
+newAx = copyobj(ax2, fig4);
+% 3) 把新 axes 全面充滿 figure 並設透明
+newAx.Position = [0 0 1 1];
+newAx.Color    = 'none';    % 透明背景
+newAx.Visible  = 'on';      % 顯示坐標（如果要隱藏就 'off'）
+
+% 4) 如果只想看 scatter，就把底圖 axis1 隱藏或移除
+%    （因為 copyobj 只複製 ax2，所以不會有底圖）
+% 5) 重設 axes 屬性保證範圍一致
+newAx.XLim = ax2.XLim;
+newAx.YLim = ax2.YLim;
+newAx.YDir = ax2.YDir;
+newAx.DataAspectRatio = ax2.DataAspectRatio;
+
+% 6) 加上 colorbar（選擇自己喜歡的位置）
+cb4 = colorbar(newAx,'eastoutside');
+cb4.Label.String = 'DOA 色階';
+%% 假設你已經有：data.map, localmaxpoints, doa, newcmax, mblue2, mcolormap12
+
+% 1) 先開新 figure，配置好底圖和疊層的空間
+fig2 = figure('Units','normalized','Position',[0.1 0.1 0.8 0.8]);
+
+% 底圖層 ax1：Topo
+ax1 = axes('Position',[0.1 0.1 0.75 0.8]);
+imagesc(ax1, data.map);
+ax1.Colormap = mblue2;
+caxis(ax1, histogramvalr(data.map));
+axis(ax1,'image','off');
+title(ax1,'Topo + DOA (plot overlay)');
+cb1 = colorbar(ax1,'eastoutside');
+cb1.Label.String = 'Height 色階';
+
+% 2) 疊圖層 ax2：DOA 線段
+ax2 = axes('Position', ax1.Position, ...
+           'Color','none', ...
+           'XLim', ax1.XLim, 'YLim', ax1.YLim, ...
+           'YDir', ax1.YDir, ...
+           'DataAspectRatio', ax1.DataAspectRatio);
+hold(ax2,'on');
+
+% 參數設定
+L      = 5;                  % 線段長度
+cmap2  = mcolormap12;         % DOA colormap
+
+nColor = size(cmap2,1);
+maxVal = max(abs(doa));
+
+% 用 plot 一根根畫線段
+for i = 1:numel(doa)
+    x0 = localmaxpoints(i,1);
+    y0 = localmaxpoints(i,2);
+    d  = doa(i);
+    if d > 0
+        xLine = [x0, x0];
+        yLine = [y0 - L/2, y0 + L/2];
+    else
+        xLine = [x0 - L/2, x0 + L/2];
+        yLine = [y0, y0];
+    end
+    
+    % DOA 映射到 colormap index
+    idx = round((d + maxVal)/(2*maxVal)*(nColor-1)) + 1;
+    idx = min(max(idx,1), nColor);
+baseColor = cmap2(idx,:);        % 原始 colormap 顏色
+    % 轉 HSV，放大飽和度 S
+    hsv = rgb2hsv(baseColor);
+    hsv(2) = min(1, hsv(2) * 1);   % 把飽和度乘 1，超過1就截到1
+    newColor = hsv2rgb(hsv);
+
+    % 用新的 newColor 畫線
+    plot(ax2, xLine, yLine, 'LineWidth', 3, 'Color', newColor);
+end
+
+ax2.Visible = 'off';
+
+% 3) 再加第二條 DOA colorbar，不影響 ax2 大小
+cb2Ax = axes('Position',[0.87 0.1 0.02 0.8], 'Visible','off');
+cb2   = colorbar(cb2Ax, 'west');
+cb2.Label.String = 'DOA 色階';
+colormap(cb2Ax, mcolormap12);
+caxis(cb2Ax, [-newcmax/8 newcmax/8]);
+
+% 4) 同步兩層 axes
+linkprop([ax1, ax2], {'Position','XLim','YLim','DataAspectRatio','YDir'});
+
+
+
+
+gxx_abs=abs(gxx);
+gyy_abs=abs(gyy);
+
+
+if mdebug1==1
+plot_name={'data.map','gxx','gxx_abs','doa_map','gyy','gyy_abs'};
+  plot_title={'original','d^{2}Z/dx^{2}','abs(d^{2}Z/dx^{2})','doa map','d^{2}Z/dy^{2}','abs(d^{2}Z/dy^{2})'};
+
+
+ 
+[~, totfigs]=size( plot_name);
+for i=1:totfigs
+
+plotdata=evalin('base' , plot_name{1,i});
+plottitle=evalin('base' , plot_name{1,i});
+
+figure;
+
+fig = clf();
+ax1 = axes(fig); 
+ax2 = copyobj(ax1,fig);
+% Plot on both axes; specify axis handles!
+
+imagesc(ax1,plotdata);
+hold on;
+scatter(ax2,localmaxpoints(:,1),localmaxpoints(:,2),[],doa, 'filled');colormap(mcolormap12);pbaspect([1 1 1]);
+
+% Set colormaps
+colormap(ax1,mblue2)
+colormap(ax2,mcolormap12)
+% Set all other properties of ax1 before moving on
+% Finally, link the axis properties and turn off axis #2.
+ax2.UserData = linkprop([ax1,ax2],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax2.Visible = 'off';
+clim(ax2, [-newcmax/2 newcmax/2]);
+cb(1) = colorbar(ax1,'eastoutside'); 
+cb(2) = colorbar(ax2,'westoutside'); 
+title( plot_title{1,i});
+pbaspect(ax2,[1 1 1]);
+pbaspect(ax1,[1 1 1]);
+
+% 
+end
+
+%% 
+
+
+
+
+figure;
+
+fig = clf();
+ax1 = axes(fig); 
+ax2 = copyobj(ax1,fig);
+% Plot on both axes; specify axis handles!
+
+imagesc(ax1,doa_map)
+hold on;
+scatter(ax2,localmaxpoints(:,1),localmaxpoints(:,2),[],doa, 'filled');colormap(mcolormap12);
+
+% Set colormaps
+colormap(ax1,mcolormap12)
+colormap(ax2,mcolormap12)
+% Set all other properties of ax1 before moving on
+% Finally, link the axis properties and turn off axis #2.
+ax2.UserData = linkprop([ax1,ax2],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax2.Visible = 'off';
+clim(ax1, [-newcmax/2 newcmax/2]);
+clim(ax2, [-newcmax/2 newcmax/2]);
+cb(1) = colorbar(ax1,'eastoutside'); 
+cb(2) = colorbar(ax2,'westoutside'); 
+title( 'doa map');
+pbaspect(ax2,[1 1 1]);
+pbaspect(ax1,[1 1 1]); 
+end
+
+
+
+%% 
+doa_longy=localmaxpoints;
+doa_longy(:,3)= doa;
+doa_longy(doa_longy<0)=0;
+doa_longy(doa_longy(:,3) == 0,:) = [];
+
+doa_longx=localmaxpoints;
+doa_longx(:,3)= doa;
+doa_longx(:,1)= -doa_longx(:,1);
+doa_longx(:,2)= -doa_longx(:,2);
+doa_longx(doa_longx>0)=0;
+doa_longx(doa_longx(:,3) == 0,:) = [];
+doa_longx=-doa_longx;
+doa_longx(:,3)= -doa_longx(:,3);
+
+figure;
+
+fig = clf();
+ax1 = axes(fig); 
+ax2 = copyobj(ax1,fig);
+ax3 = copyobj(ax1,fig);
+ax4 = copyobj(ax1,fig);
+ax5 = copyobj(ax1,fig);
+ax6 = copyobj(ax1,fig);
+% Plot on both axes; specify axis handles!
+
+imagesc(ax1,testimg)
+hold on;
+scatter(ax2,localmaxpoints(:,1),localmaxpoints(:,2),[],doa, 'filled','s');colormap(mcolormap12);
+scatter(ax3,doa_longy(:,1),(doa_longy(:,2)-1),[],doa_longy(:,3), 'filled','s');colormap(mcolormap12);
+scatter(ax4,doa_longy(:,1),(doa_longy(:,2)+1),[],doa_longy(:,3), 'filled','s');colormap(mcolormap12);
+scatter(ax5,(doa_longx(:,1)-1),(doa_longx(:,2)),[],doa_longx(:,3), 'filled','s');colormap(mcolormap12);
+scatter(ax6,(doa_longx(:,1)+1),(doa_longx(:,2)),[],doa_longx(:,3), 'filled','s');colormap(mcolormap12);
+hold off;
+
+
+%  totpeaks2=size(localmaxpoints);
+% 
+% 
+% for i=1:totpeaks2(1,1)
+%     if doa(i,1) > 0
+%         scatter(ax3,localmaxpoints(i,1),localmaxpoints(i-1,2),[],doa(i,1), 'filled');colormap(mcolormap12);
+%         scatter(ax3,localmaxpoints(i,1),localmaxpoints(i+1,2),[],doa(i,1), 'filled');colormap(mcolormap12);
+% 
+% elseif doa(i,1) < 0
+%         scatter(ax3,localmaxpoints(i-1,1),localmaxpoints(i,2),[],doa(i,1), 'filled');colormap(mcolormap12);
+%         scatter(ax3,localmaxpoints(i+1,1),localmaxpoints(i,2),[],doa(i,1), 'filled');colormap(mcolormap12);
+%     end
+% end
+
+
+
+% Set colormaps
+%colormap(ax1,moranges)
+colormap(ax2,mcolormap12)
+colormap(ax3,mcolormap12)
+colormap(ax4,mcolormap12)
+colormap(ax5,mcolormap12)
+colormap(ax6,mcolormap12)
+% Set all other properties of ax1 before moving on
+% Finally, link the axis properties and turn off axis #2.
+
+
+% ax6.UserData = linkprop([ax1,ax2],...
+%     {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+%     'ydir','xdir','xlim','ylim'}); % add more props as needed
+% ax6.Visible = 'off';
+
+
+
+
+ax2.UserData = linkprop([ax1,ax2],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax2.Visible = 'off';
+
+ax3.UserData = linkprop([ax1,ax3],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax3.Visible = 'off';
+
+
+ax4.UserData = linkprop([ax1,ax4],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax4.Visible = 'off';
+
+ax5.UserData = linkprop([ax1,ax5],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax5.Visible = 'off';
+
+
+ax6.UserData = linkprop([ax1,ax6],...
+    {'Position','InnerPosition','DataAspectRatio','xtick','ytick', ...
+    'ydir','xdir','xlim','ylim'}); % add more props as needed
+ax6.Visible = 'off';
+
+
+
+
+clim(ax1, histogramvalk(testimg));
+clim(ax2, [-newcmax/2 newcmax/2]);
+clim(ax3, [-newcmax/2 newcmax/2]);
+clim(ax4, [-newcmax/2 newcmax/2]);
+clim(ax5, [-newcmax/2 newcmax/2]);
+clim(ax6, [-newcmax/2 newcmax/2]);
+cb(1) = colorbar(ax1,'eastoutside'); 
+cb(2) = colorbar(ax2,'westoutside'); 
+title( 'original map with scatter');
+pbaspect(ax1,[1 1 1]);
+pbaspect(ax2,[1 1 1]);
+pbaspect(ax3,[1 1 1]);
+pbaspect(ax4,[1 1 1]);
+pbaspect(ax5,[1 1 1]);
+pbaspect(ax6,[1 1 1]);
+
+
+      
+% clearvars  -except m*; 
+
+       function hisvalr = histogramvalr(rimage)
+sigma_val = 3;
+[nrr,ncr,~] = size(rimage);
+        color_lim_all = zeros(1,2);
+        
+            
+            q_std = std(reshape(rimage(:,:),nrr*ncr,1));
+            q_mean = mean(reshape(rimage(:,:),nrr*ncr,1));
+            min_ratio = 1;
+            max_ratio = 1;
+          
+            color_lim_all(1,1) = q_mean-q_std*sigma_val*min_ratio;
+            color_lim_all(1,2) = q_mean+q_std*sigma_val*max_ratio;
+            hisvalr=[color_lim_all(1,1) color_lim_all(1,2)];
+end
+function hisvalk = histogramvalk(kimage)
+sigma_val = 3;
+[nrk,nck,~] = size(kimage);
+        color_lim_all = zeros(1,2);
+        
+            q_min = min(reshape(kimage(:,:),nrk*nck,1));
+            q_max = max(reshape(kimage(:,:),nrk*nck,1));
+            q_std = std(reshape(kimage(:,:),nrk*nck,1));
+            q_mean = mean(reshape(kimage(:,:),nrk*nck,1));
+      
+          
+           min_ratio = q_mean/(q_std*sigma_val);
+           max_ratio = abs(q_max-q_mean)/(q_max-q_min);
+            color_lim_all(1,1) = q_mean-q_std*sigma_val*min_ratio;
+            color_lim_all(1,2) = q_mean+q_std*sigma_val*max_ratio;
+           hisvalk=[color_lim_all(1,1) color_lim_all(1,2)];
+end
