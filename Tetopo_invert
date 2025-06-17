@@ -13,14 +13,27 @@ if ~evalin('base','exist("Tetopo","var")')
     error('找不到 Tetopo。請先把 grid 轉成 Tetopo 並載入 Workspace。');
 end
 Tetopo = evalin('base','Tetopo');
+%% 0.1 推算尺寸與模板 ---------------------------------------------------
+[rows, cols] = size(Tetopo);
+if rows ~= cols || mod(rows,2) ~= 0
+    error('Tetopo 必須為 2n×2n 的正方形矩陣！');
+end
+n    = rows / 2;
+Te   = [0 1; 0 0];           % 單元 2×2 Te 鋪排
+TeTe = repmat(Te, n);
+D    = [0 0; 1 0];           % row 奇、col 偶 → 1
+DD   = repmat(D, n);         % 合法放 dopant 的位置遮罩
 
 %% === 讓使用者輸入 Doping, Alpha, Beta =========================
 param = param_gui();            % 這是我們等會兒加在檔尾的函式
-targetConc = param.doping;      % 取代原本 targetConc = 0.13;
+%%!!!!!!!!!!!!!!!!%%%
+targetConc = param.doping*2;      % 取代原本 targetConc = 0.13; 注意輸出的是Gd 所以是兩倍  不是Te doping in Sb  doping map
+%%!!!!!!!!!!!!!!!!%%%
 alpha      = param.alpha;       % 取代原本 alpha = 1;
 beta       = param.beta;        % 取代原本 beta  = 50;
 
-
+Te   = [0 1; 0 0];            % 單元 2×2 Te 鋪排
+TeTe = repmat(Te, n);
 %% 0.1 自動估計 Te_amp 並給預設 Eff_diag
 vals = Tetopo(Tetopo>0);
 [~,C] = kmeans(vals(:),2,'Replicates',5);
@@ -41,21 +54,8 @@ assignin('base','Eff_diag',Eff_diag);
 fprintf('[Info] 自動估得 Te_amp = %.4f,  Eff_diag = %.4f\\n',Te_amp,Eff_diag);
 
 
-% ── 0.2 對 Tetopo 做幅度歸一化（使峰值≈1）
-Tetopo = Tetopo / Te_amp;
 
-%% 1. 推算尺寸 n ---------------------------------------------------------
-[rows, cols] = size(Tetopo);
-if rows ~= cols || mod(rows,2) ~= 0
-    error('Tetopo 必須為 2n×2n 的正方形矩陣！');
-end
-n = rows / 2;
 
-%% 2. 建立模板與遮罩 -----------------------------------------------------
-Te   = [0 1; 0 0];            % 單元 2×2 Te 鋪排
-TeTe = repmat(Te, n);
-D    = [0 0; 1 0];            % row 奇、col 偶 → 1
-DD   = repmat(D, n);          % 合法放 dopant 的位置遮罩
 
 %% 3. Recover Q ----------------------------------------------------------
 Q = (Tetopo - TeTe) / -3;
@@ -99,8 +99,8 @@ for iter = 1:max_iter
         if CCtotal(i,j) + add > 2, continue; end
 
         temp_Q = Q_sim;
-        temp_Q(i-1:j: i+1, j-1:j: j+1) = ...
-            temp_Q(i-1:j: i+1, j-1:j: j+1) + Eff_diag*add;   % 四角 +Eff
+       temp_Q(i-1:2:i+1, j-1:2:j+1) = ...
+            temp_Q(i-1:2:i+1, j-1:2:j+1) + Eff_diag*add;   % 四角 +Eff
 
         err_before = sum(abs(Q(i-1:i+1,j-1:j+1) - Q_sim (i-1:i+1,j-1:j+1)),'all');
         err_after  = sum(abs(Q(i-1:i+1,j-1:j+1) - temp_Q(i-1:i+1,j-1:j+1)),'all');
@@ -141,8 +141,8 @@ for cycle = 1:2
     for i = 2:rows-1
         for j = 2:cols-1
             if CCtotal(i,j) > 0
-                Q_from_CC(i-1:j: i+1, j-1:j: j+1) = ...
-                    Q_from_CC(i-1:j: i+1, j-1:j: j+1) + Eff_diag*CCtotal(i,j);
+                               Q_from_CC(i-1:2:i+1, j-1:2:j+1) = ...
+                    Q_from_CC(i-1:2:i+1, j-1:2:j+1) + Eff_diag*CCtotal(i,j);
             end
         end
     end
@@ -160,7 +160,11 @@ for cycle = 1:2
 end
 
 %% 6. 最終輸出 -----------------------------------------------------------
-CCtotal = CCtotal / 10;                % 按需求縮放 (保持舊習慣)
+doping_rate = sum(CCtotal(DD > 0), 'all') / nnz(DD);
+fprintf('[Info] estimated doping = %.4f (target %.4f)\n', ...
+        doping_rate, targetConc);
+%CCtotal = CCtotal / 10;    
+CCtotal = CCtotal  ;             % 按需求縮放 (保持舊習慣)
 assignin('base','Q_sim',    Q_sim);
 assignin('base','CCtotal', CCtotal);
 fprintf('[Done] 變數 Q_sim 與 CCtotal 已傳回 Workspace.\n');
@@ -245,7 +249,8 @@ if amp<=0 || eff<=0        % 非法範圍直接給 ∞
 end
 
 % 1. 以 amp 歸一化
-Tn = Tetopo / amp;
+%Tn = Tetopo / amp;
+Tn =  amp;  %比較好
 
 % 2. 快速評估殘差（不跑完整 forward，速度快很多）
 Q = (Tn - TeTe) / -3;
